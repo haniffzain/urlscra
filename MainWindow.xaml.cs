@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Controls;
 using URLScra.Models;
 using URLScra.Services;
 
@@ -27,17 +28,24 @@ public partial class MainWindow : Window
             return;
         }
 
+        var criterion = SearchCriteriaComboBox.SelectedItem is ComboBoxItem selected
+            ? selected.Content?.ToString() ?? "All"
+            : "All";
+
         AnalyzeButton.IsEnabled = false;
+        SearchCriteriaComboBox.IsEnabled = false;
         ExportButton.IsEnabled = false;
-        StatusText.Text = "Analyzing...";
+        StatusText.Text = $"Analyzing {criterion}...";
         Results.Clear();
 
         try
         {
-            var items = await _scraper.AnalyzeAsync(url);
+            var items = await _scraper.AnalyzeAsync(url, criterion);
             foreach (var item in items) Results.Add(item);
             CountText.Text = $"{Results.Count} records";
-            StatusText.Text = Results.Count == 0 ? "Tiada data dikesan pada HTML awal." : "Analysis complete.";
+            StatusText.Text = Results.Count == 0
+                ? $"Tiada {criterion} dikesan pada HTML awal."
+                : $"{criterion} analysis complete.";
             ExportButton.IsEnabled = Results.Count > 0;
         }
         catch (Exception ex)
@@ -48,6 +56,7 @@ public partial class MainWindow : Window
         finally
         {
             AnalyzeButton.IsEnabled = true;
+            SearchCriteriaComboBox.IsEnabled = true;
         }
     }
 
