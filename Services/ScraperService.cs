@@ -13,6 +13,21 @@ public sealed class ScraperService
         @"(?ix)(?:\b(?:RM|MYR|USD|SGD|EUR|GBP|AUD|JPY)\s*|[$€£¥]\s*)\d{1,3}(?:[,\s]\d{3})*(?:\.\d{1,2})?|\b\d+(?:\.\d{2})\s*(?:RM|MYR|USD|SGD|EUR|GBP|AUD|JPY)\b",
         RegexOptions.Compiled);
 
+    private static readonly Regex EmailRegex = new(
+        @"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63}\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly string[] DocumentExtensions =
+    {
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+        ".txt", ".rtf", ".odt", ".ods", ".odp"
+    };
+
+    private static readonly string[] VideoExtensions =
+    {
+        ".mp4", ".webm", ".mov", ".m4v", ".avi", ".m3u8"
+    };
+
     private readonly HttpClient _http;
 
     public ScraperService()
@@ -22,7 +37,10 @@ public sealed class ScraperService
         _http.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9,ms;q=0.8");
     }
 
-    public async Task<IReadOnlyList<ScrapeItem>> AnalyzeAsync(string url, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ScrapeItem>> AnalyzeAsync(
+        string url,
+        string criterion = "All",
+        CancellationToken cancellationToken = default)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var pageUri) ||
             (pageUri.Scheme != Uri.UriSchemeHttp && pageUri.Scheme != Uri.UriSchemeHttps))
@@ -36,11 +54,19 @@ public sealed class ScraperService
         var document = await context.OpenAsync(req => req.Content(html).Address(pageUri), cancellationToken);
         var results = new List<ScrapeItem>();
 
-        AddTitle(document, pageUri, results);
-        AddPrices(document, pageUri, results);
-        AddImages(document, pageUri, results);
-        AddVideos(document, pageUri, results);
-        AddLinks(document, pageUri, results);
+        var mode = string.IsNullOrWhiteSpace(criterion)
+            ? "all"
+            : criterion.Trim().ToLowerInvariant();
+        var all = mode == "all";
+
+        if (all) AddTitle(document, pageUri, results);
+        if (all || mode == "price") AddPrices(document, pageUri, results);
+        if (all || mode == "image") AddImages(document, pageUri, results);
+        if (all || mode == "video") AddVideos(document, pageUri, results);
+        if (all || mode == "link") AddLinks(document, pageUri, results);
+        if (all || mode == "doc") AddDocuments(document, pageUri, results);
+        if (all || mode == "csv") AddCsvFiles(document, pageUri, results);
+        if (all || mode == "email") AddEmails(document, pageUri, results);
 
         return results
             .Where(x => !string.IsNullOrWhiteSpace(x.Value))
@@ -91,6 +117,7 @@ public sealed class ScraperService
                 raw = srcset?.Split(',', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim()
                     .Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
             }
+
             var absolute = ToAbsolute(pageUri, raw);
             if (absolute is not null)
                 results.Add(new ScrapeItem { Type = "Image", Value = absolute, SourceUrl = pageUri.ToString() });
@@ -128,6 +155,18 @@ public sealed class ScraperService
                 results.Add(new ScrapeItem { Type = "Video Embed", Value = src, SourceUrl = pageUri.ToString() });
         }
 
+        foreach (var anchor in document.Links.Take(500))
+        {
+            var href = ToAbsolute(pageUri, anchor.GetAttribute("href"));
+            if (href is null || !HasExtension(href, VideoExtensions)) continue;
+            results.Add(new ScrapeItem
+            {
+                Type = "Video",
+                Value = href,
+                SourceUrl = LabelOrPage(anchor.TextContent, pageUri)
+            });
+        }
+
         var ogVideo = document.QuerySelector("meta[property='og:video']")?.GetAttribute("content") ??
                       document.QuerySelector("meta[property='og:video:url']")?.GetAttribute("content");
         var absoluteOgVideo = ToAbsolute(pageUri, ogVideo);
@@ -141,9 +180,91 @@ public sealed class ScraperService
         {
             var href = ToAbsolute(pageUri, anchor.GetAttribute("href"));
             if (href is null) continue;
-            var label = Clean(anchor.TextContent);
-            results.Add(new ScrapeItem { Type = "Link", Value = href, SourceUrl = string.IsNullOrWhiteSpace(label) ? pageUri.ToString() : label });
+            results.Add(new ScrapeItem
+            {
+                Type = "Link",
+                Value = href,
+                SourceUrl = LabelOrPage(anchor.TextContent, pageUri)
+            });
         }
+    }
+
+    private static void AddDocuments(IDocument document, Uri pageUri, List<ScrapeItem> results)
+    {
+        foreach (var anchor in document.Links.Take(500))
+        {
+            var href = ToAbsolute(pageUri, anchor.GetAttribute("href"));
+            if (href is null || !HasExtension(href, DocumentExtensions)) continue;
+            results.Add(new ScrapeItem
+            {
+                Type = "Doc",
+                Value = href,
+                SourceUrl = LabelOrPage(anchor.TextContent, pageUri)
+            });
+        }
+    }
+
+    private static void AddCsvFiles(IDocument document, Uri pageUri, List<ScrapeItem> results)
+    {
+        foreach (var anchor in document.Links.Take(500))
+        {
+            var href = ToAbsolute(pageUri, anchor.GetAttribute("href"));
+            if (href is null || !HasExtension(href, new[] { ".csv" })) continue;
+            results.Add(new ScrapeItem
+            {
+                Type = "CSV",
+                Value = href,
+                SourceUrl = LabelOrPage(anchor.TextContent, pageUri)
+            });
+        }
+    }
+
+    private static void AddEmails(IDocument document, Uri pageUri, List<ScrapeItem> results)
+    {
+        foreach (var anchor in document.Links.Take(500))
+        {
+            var href = anchor.GetAttribute("href");
+            if (string.IsNullOrWhiteSpace(href) || !href.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var addresses = href[7..].Split('?', 2)[0]
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var address in addresses)
+            {
+                if (!EmailRegex.IsMatch(address)) continue;
+                results.Add(new ScrapeItem
+                {
+                    Type = "Email",
+                    Value = address,
+                    SourceUrl = LabelOrPage(anchor.TextContent, pageUri)
+                });
+            }
+        }
+
+        var text = document.Body?.TextContent ?? "";
+        foreach (Match match in EmailRegex.Matches(text).Cast<Match>().Take(200))
+        {
+            results.Add(new ScrapeItem
+            {
+                Type = "Email",
+                Value = match.Value,
+                SourceUrl = pageUri.ToString()
+            });
+        }
+    }
+
+    private static bool HasExtension(string url, IEnumerable<string> extensions)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+        var path = uri.AbsolutePath;
+        return extensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string LabelOrPage(string? label, Uri pageUri)
+    {
+        var clean = Clean(label ?? "");
+        return string.IsNullOrWhiteSpace(clean) ? pageUri.ToString() : clean;
     }
 
     private static string? ToAbsolute(Uri pageUri, string? value)
