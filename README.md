@@ -1,10 +1,25 @@
 # URLScra
 
-**Paste URL. Choose data. Get results.**
+**Paste URL. Choose engine. Get data.**
 
-URLScra ialah aplikasi desktop Windows untuk mengekstrak data daripada halaman web dan memaparkannya dalam UI sebelum eksport ke CSV.
+URLScra ialah aplikasi desktop Windows untuk mengekstrak data daripada halaman web, termasuk laman yang memerlukan JavaScript, dan memaparkan hasil sebelum eksport ke CSV.
 
-## M1.2 search criteria
+## M2.1 engine
+
+URLScra mempunyai tiga pilihan engine:
+
+- **Auto** — cuba Fast HTML dahulu dan jatuh ke Browser jika hasil tidak mencukupi.
+- **Fast HTML** — HTTP + AngleSharp sahaja; paling pantas untuk laman statik/server-rendered.
+- **Browser** — Playwright Chromium, JavaScript rendering dan adaptive auto-scroll.
+
+Browser mode melaporkan status seperti `Loading`, `Waiting`, `Auto-scroll` dan `Capturing DOM`. Analisis juga boleh dihentikan menggunakan butang **Cancel**.
+
+## Output mode
+
+- **Raw Data** — hasil individu seperti Text, Price, Image, Link dan Email.
+- **Smart Records** — cuba menggabungkan Name + Price + Image + Link + Rating + Stock sebagai satu rekod.
+
+## Search criteria
 
 - All
 - Text
@@ -27,7 +42,7 @@ URLScra ialah aplikasi desktop Windows untuk mengekstrak data daripada halaman w
 
 ## Detectors
 
-M1.2 menyokong HTML statik yang dihantar oleh server, termasuk:
+URLScra menyokong:
 
 - title dan teks halaman
 - harga dan mata wang biasa
@@ -39,23 +54,55 @@ M1.2 menyokong HTML statik yang dihantar oleh server, termasuk:
 - HTML table sebagai row data
 - metadata, canonical URL dan OpenGraph/Twitter metadata
 - social links
-- product detection asas melalui Schema.org JSON-LD dan heuristik DOM
+- product detection melalui Schema.org JSON-LD dan heuristik DOM
+- JavaScript-rendered DOM melalui Playwright Chromium
+- adaptive auto-scroll untuk kandungan lazy/infinite-style pages
 
-## Build
+## Setup Windows
 
 Keperluan:
 
 - Windows 10/11
 - .NET SDK yang menyokong target `net8.0-windows`
 
+### 1. Pasang Chromium Playwright sekali sahaja
+
 ```powershell
-dotnet restore
-dotnet build -c Release
-dotnet run
+.\install-browser.ps1
 ```
 
-## Batasan semasa
+Jika drive `D:` tersedia, browser disimpan di:
 
-M1.2 membaca HTML awal yang dihantar oleh server. Kandungan yang hanya muncul selepas JavaScript dijalankan, infinite scroll atau interaksi browser akan ditambah dalam milestone browser-engine seterusnya.
+```text
+D:\URLScra\PlaywrightBrowsers
+```
 
-URLScra tidak direka untuk memintas CAPTCHA, anti-bot, login atau kawalan akses. Gunakan hanya pada data dan laman yang anda dibenarkan akses dan hormati rate limit, hak cipta, privasi dan polisi laman.
+### 2. Jalankan local pipeline
+
+```powershell
+.\pipeline.ps1
+```
+
+Pipeline lokal menjalankan:
+
+```text
+restore -> build Release -> run
+```
+
+Build sahaja:
+
+```powershell
+.\pipeline.ps1 -NoRun
+```
+
+Publish Windows x64:
+
+```powershell
+.\pipeline.ps1 -Publish
+```
+
+GitHub Actions/CI tidak digunakan semasa fasa pembangunan aktif supaya iterasi lebih cepat.
+
+## Penggunaan yang bertanggungjawab
+
+URLScra tidak direka untuk memintas CAPTCHA, anti-bot, login, paywall atau kawalan akses. Browser mode hanya merender halaman seperti browser biasa. Gunakan pada data dan laman yang anda dibenarkan akses serta hormati rate limit, hak cipta, privasi, robots/polisi laman dan terma perkhidmatan.
