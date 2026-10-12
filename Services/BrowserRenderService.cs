@@ -41,6 +41,79 @@ public sealed class BrowserRenderService
         }
         """;
 
+    private const string RenderedImagesScript = """
+        () => {
+            const urls = new Set();
+
+            const add = (value) => {
+                if (!value || typeof value !== 'string') return;
+                const raw = value.trim().replace(/^['"]|['"]$/g, '');
+                if (!raw || raw.startsWith('data:') || raw.startsWith('blob:')) return;
+                try {
+                    const absolute = new URL(raw, document.baseURI).href;
+                    if (absolute.startsWith('http://') || absolute.startsWith('https://')) {
+                        urls.add(absolute);
+                    }
+                } catch (_) { }
+            };
+
+            const addSrcset = (value) => {
+                if (!value) return;
+                for (const candidate of value.split(',')) {
+                    const first = candidate.trim().split(/\s+/)[0];
+                    add(first);
+                }
+            };
+
+            const collect = (root) => {
+                if (!root.querySelectorAll) return;
+
+                for (const img of root.querySelectorAll('img')) {
+                    add(img.currentSrc);
+                    add(img.src);
+                    add(img.getAttribute('src'));
+                    add(img.getAttribute('data-src'));
+                    add(img.getAttribute('data-lazy-src'));
+                    add(img.getAttribute('data-original'));
+                    add(img.getAttribute('data-url'));
+                    addSrcset(img.getAttribute('srcset'));
+                    addSrcset(img.getAttribute('data-srcset'));
+                }
+
+                for (const source of root.querySelectorAll('picture source, source[type^="image/"]')) {
+                    add(source.getAttribute('src'));
+                    addSrcset(source.getAttribute('srcset'));
+                    addSrcset(source.getAttribute('data-srcset'));
+                }
+
+                for (const element of root.querySelectorAll('*')) {
+                    try {
+                        const background = getComputedStyle(element).backgroundImage || '';
+                        const regex = /url\((['"]?)(.*?)\1\)/g;
+                        let match;
+                        while ((match = regex.exec(background)) !== null) add(match[2]);
+                    } catch (_) { }
+
+                    if (element.shadowRoot) collect(element.shadowRoot);
+                }
+            };
+
+            collect(document);
+
+            try {
+                for (const entry of performance.getEntriesByType('resource')) {
+                    const name = entry.name || '';
+                    const type = (entry.initiatorType || '').toLowerCase();
+                    if (type === 'img' || /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)(?:$|[?#])/i.test(name)) {
+                        add(name);
+                    }
+                }
+            } catch (_) { }
+
+            return Array.from(urls).slice(0, 1500);
+        }
+        """;
+
     public string BrowserPath { get; }
 
     public BrowserRenderService()
@@ -124,16 +197,19 @@ public sealed class BrowserRenderService
                     cancellationToken.ThrowIfCancellationRequested();
                     await AdaptiveScrollAsync(page, progress, cancellationToken);
 
-                    progress?.Report("Capturing rendered DOM and visible text...");
+                    progress?.Report("Capturing rendered DOM, text and images...");
                     await page.EvaluateAsync("() => window.scrollTo(0, 0)");
                     await Task.Delay(250, cancellationToken);
 
                     var html = await page.ContentAsync();
                     var renderedText = await CaptureRenderedTextAsync(page);
+                    var renderedImages = await CaptureRenderedImagesAsync(page);
                     var finalUrl = string.IsNullOrWhiteSpace(page.Url) ? url : page.Url;
-                    var augmentedHtml = AppendRenderedText(html, renderedText);
 
-                    progress?.Report("Browser rendering complete.");
+                    var augmentedHtml = AppendRenderedText(html, renderedText);
+                    augmentedHtml = AppendRenderedImages(augmentedHtml, renderedImages);
+
+                    progress?.Report($"Browser rendering complete · {renderedImages.Count} image resources captured.");
                     return new RenderedPage(augmentedHtml, finalUrl, renderedText);
                 }
                 finally
@@ -177,6 +253,16 @@ public sealed class BrowserRenderService
     private static Task<string> CaptureRenderedTextAsync(IPage page) =>
         page.EvaluateAsync<string>(RenderedTextScript);
 
+    private static async Task<IReadOnlyList<string>> CaptureRenderedImagesAsync(IPage page)
+    {
+        var urls = await page.EvaluateAsync<string[]>(RenderedImagesScript);
+        return urls
+            .Where(IsHttpUrl)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(1500)
+            .ToList();
+    }
+
     private static string AppendRenderedText(string html, string renderedText)
     {
         var lines = renderedText
@@ -192,12 +278,37 @@ public sealed class BrowserRenderService
             return html;
 
         var block = $"<section data-urlscra-rendered-text=\"true\">{string.Join(string.Empty, lines)}</section>";
-        var bodyClose = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-
-        return bodyClose >= 0
-            ? html.Insert(bodyClose, block)
-            : html + block;
+        return InsertBeforeBodyClose(html, block);
     }
+
+    private static string AppendRenderedImages(string html, IReadOnlyList<string> imageUrls)
+    {
+        if (imageUrls.Count == 0)
+            return html;
+
+        var tags = imageUrls
+            .Where(IsHttpUrl)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(1500)
+            .Select(url => $"<img data-urlscra-rendered-image=\"true\" src=\"{WebUtility.HtmlEncode(url)}\" alt=\"Rendered Browser\" />")
+            .ToArray();
+
+        if (tags.Length == 0)
+            return html;
+
+        var block = $"<section data-urlscra-rendered-images=\"true\" style=\"display:none\">{string.Join(string.Empty, tags)}</section>";
+        return InsertBeforeBodyClose(html, block);
+    }
+
+    private static string InsertBeforeBodyClose(string html, string block)
+    {
+        var bodyClose = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+        return bodyClose >= 0 ? html.Insert(bodyClose, block) : html + block;
+    }
+
+    private static bool IsHttpUrl(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
     private static bool LooksLikeJavaScriptPlaceholder(string text)
     {
