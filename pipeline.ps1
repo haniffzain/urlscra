@@ -1,6 +1,7 @@
 param(
     [switch]$Publish,
-    [switch]$NoRun
+    [switch]$NoRun,
+    [switch]$SetupBrowser
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +11,11 @@ dotnet restore URLScra.csproj
 
 Write-Host "[URLScra] Build Release"
 dotnet build URLScra.csproj -c Release --no-restore
+
+if ($SetupBrowser) {
+    Write-Host "[URLScra] Setup Playwright Chromium"
+    & (Join-Path $PSScriptRoot "install-browser.ps1") -SkipBuild
+}
 
 if ($Publish) {
     Write-Host "[URLScra] Publish win-x64"
@@ -22,7 +28,7 @@ if ($Publish) {
 
     Write-Host "[URLScra] Published: publish\win-x64"
 }
-elseif (-not $NoRun) {
+elif (-not $NoRun) {
     Write-Host "[URLScra] Run"
     dotnet run --project URLScra.csproj -c Release --no-build
 }
