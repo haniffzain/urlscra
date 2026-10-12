@@ -13,18 +13,55 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,18">
             <TextBlock Text="URLScra" FontSize="28" FontWeight="SemiBold"/>
-            <TextBlock Text="Paste URL. Get Data." Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
+            <TextBlock Text="Paste URL. Choose data. Get results." Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"/>
         </StackPanel>
 
         <Grid Grid.Row="1" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="165"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="UrlTextBox" Grid.Column="0" VerticalContentAlignment="Center"/>
-            <Button x:Name="AnalyzeButton" Grid.Column="1" Content="Analyze" Click="AnalyzeButton_Click" MinWidth="110"/>
-            <Button x:Name="ExportButton" Grid.Column="2" Content="Export CSV" Click="ExportButton_Click" MinWidth="120" IsEnabled="False"/>
+
+            <TextBox x:Name="UrlTextBox"
+                     Grid.Column="0"
+                     VerticalContentAlignment="Center"
+                     Margin="0,4,4,4"
+                     ToolTip="Masukkan URL penuh, contoh https://example.com"/>
+
+            <ComboBox x:Name="SearchCriteriaComboBox"
+                      Grid.Column="1"
+                      SelectedIndex="0"
+                      Margin="4"
+                      Padding="10,8"
+                      VerticalContentAlignment="Center"
+                      Background="#11151B"
+                      Foreground="{StaticResource TextBrush}"
+                      BorderBrush="{StaticResource BorderBrush}"
+                      ToolTip="Pilih jenis data yang hendak dicari">
+                <ComboBoxItem Content="All"/>
+                <ComboBoxItem Content="Image"/>
+                <ComboBoxItem Content="Price"/>
+                <ComboBoxItem Content="Video"/>
+                <ComboBoxItem Content="Link"/>
+                <ComboBoxItem Content="Doc"/>
+                <ComboBoxItem Content="CSV"/>
+                <ComboBoxItem Content="Email"/>
+            </ComboBox>
+
+            <Button x:Name="AnalyzeButton"
+                    Grid.Column="2"
+                    Content="Analyze"
+                    Click="AnalyzeButton_Click"
+                    MinWidth="110"/>
+
+            <Button x:Name="ExportButton"
+                    Grid.Column="3"
+                    Content="Export CSV"
+                    Click="ExportButton_Click"
+                    MinWidth="120"
+                    IsEnabled="False"/>
         </Grid>
 
         <Border Grid.Row="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
