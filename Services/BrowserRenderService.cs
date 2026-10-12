@@ -55,25 +55,41 @@ public sealed class BrowserRenderService
                     page.SetDefaultTimeout(15000);
 
                     progress?.Report("Loading page...");
-                    await page.GotoAsync(url, new PageGotoOptions
-                    {
-                        WaitUntil = WaitUntilState.DOMContentLoaded,
-                        Timeout = 30000
-                    });
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    progress?.Report("Waiting for dynamic content...");
                     try
                     {
-                        await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new PageWaitForLoadStateOptions
+                        await page.GotoAsync(url, new PageGotoOptions
                         {
-                            Timeout = 6000
+                            WaitUntil = WaitUntilState.DOMContentLoaded,
+                            Timeout = 30000
                         });
                     }
-                    catch (PlaywrightException)
+                    catch (Microsoft.Playwright.TimeoutException)
                     {
-                        // Modern sites often keep sockets open. Continue with the DOM already rendered.
+                        // Some streaming / SPA pages keep navigation busy even though useful DOM is already present.
+                        // Continue if Chromium has reached a real page rather than aborting the scrape.
+                        if (string.IsNullOrWhiteSpace(page.Url) ||
+                            page.Url.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
+                            throw;
                     }
+
+                    cancellationToken.ThrowIfCancellationRequested();
+                    progress?.Report("Waiting for rendered content...");
+
+                    try
+                    {
+                        await page.Locator("body").WaitForAsync(new LocatorWaitForOptions
+                        {
+                            State = WaitForSelectorState.Attached,
+                            Timeout = 5000
+                        });
+                    }
+                    catch (Microsoft.Playwright.TimeoutException)
+                    {
+                        // Continue and let ContentAsync decide whether useful DOM exists.
+                    }
+
+                    // Give initial client-side rendering a brief chance to populate the DOM.
+                    await Task.Delay(700, cancellationToken);
 
                     cancellationToken.ThrowIfCancellationRequested();
                     await AdaptiveScrollAsync(page, progress, cancellationToken);
