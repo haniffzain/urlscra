@@ -1,5 +1,6 @@
 using Microsoft.Playwright;
 using System.IO;
+using System.Net;
 using URLScra.Models;
 
 namespace URLScra.Services;
@@ -97,7 +98,6 @@ public sealed class BrowserRenderService
                     }
                     catch (PlaywrightException ex) when (IsTimeout(ex))
                     {
-                        // Streaming / SPA pages may keep navigation busy even when useful DOM is present.
                         if (string.IsNullOrWhiteSpace(page.Url) ||
                             page.Url.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
                             throw;
@@ -131,9 +131,10 @@ public sealed class BrowserRenderService
                     var html = await page.ContentAsync();
                     var renderedText = await CaptureRenderedTextAsync(page);
                     var finalUrl = string.IsNullOrWhiteSpace(page.Url) ? url : page.Url;
+                    var augmentedHtml = AppendRenderedText(html, renderedText);
 
                     progress?.Report("Browser rendering complete.");
-                    return new RenderedPage(html, finalUrl, renderedText);
+                    return new RenderedPage(augmentedHtml, finalUrl, renderedText);
                 }
                 finally
                 {
@@ -160,14 +161,12 @@ public sealed class BrowserRenderService
         IProgress<string>? progress,
         CancellationToken cancellationToken)
     {
-        string lastText = "";
-
         for (var pass = 1; pass <= 12; pass++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            lastText = await CaptureRenderedTextAsync(page);
+            var text = await CaptureRenderedTextAsync(page);
 
-            if (lastText.Length >= 180 && !LooksLikeJavaScriptPlaceholder(lastText))
+            if (text.Length >= 180 && !LooksLikeJavaScriptPlaceholder(text))
                 return;
 
             progress?.Report($"Waiting for client content {pass}/12...");
@@ -177,6 +176,28 @@ public sealed class BrowserRenderService
 
     private static Task<string> CaptureRenderedTextAsync(IPage page) =>
         page.EvaluateAsync<string>(RenderedTextScript);
+
+    private static string AppendRenderedText(string html, string renderedText)
+    {
+        var lines = renderedText
+            .Replace("\r", "")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => line.Length >= 3 && !LooksLikeJavaScriptPlaceholder(line))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(600)
+            .Select(line => $"<p data-urlscra-rendered=\"true\">{WebUtility.HtmlEncode(line)}</p>")
+            .ToArray();
+
+        if (lines.Length == 0)
+            return html;
+
+        var block = $"<section data-urlscra-rendered-text=\"true\">{string.Join(string.Empty, lines)}</section>";
+        var bodyClose = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+
+        return bodyClose >= 0
+            ? html.Insert(bodyClose, block)
+            : html + block;
+    }
 
     private static bool LooksLikeJavaScriptPlaceholder(string text)
     {
