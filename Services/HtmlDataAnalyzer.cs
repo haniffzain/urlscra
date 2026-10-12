@@ -19,9 +19,11 @@ public static class HtmlDataAnalyzer
         @"(?x)(?<!\w)(?:\+?\d{1,3}[\s.()-]*)?(?:\d[\s.()-]*){7,14}(?!\w)",
         RegexOptions.Compiled);
 
+    private static readonly string[] PdfExtensions = { ".pdf" };
+
     private static readonly string[] DocumentExtensions =
     {
-        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".odt", ".ods", ".odp"
+        ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".odt", ".ods", ".odp"
     };
 
     private static readonly string[] VideoExtensions = { ".mp4", ".webm", ".mov", ".m4v", ".avi", ".m3u8" };
@@ -63,6 +65,7 @@ public static class HtmlDataAnalyzer
         if (all || mode == "video") AddVideos(document, pageUri, results);
         if (all || mode == "audio") AddAudio(document, pageUri, results);
         if (all || mode == "link") AddLinks(document, pageUri, results);
+        if (all || mode == "pdf") AddFileLinks(document, pageUri, results, "PDF", PdfExtensions);
         if (all || mode is "doc" or "document") AddFileLinks(document, pageUri, results, "Document", DocumentExtensions);
         if (all || mode == "csv") AddFileLinks(document, pageUri, results, "CSV", new[] { ".csv" });
         if (all || mode == "email") AddEmails(document, pageUri, results);
