@@ -65,10 +65,12 @@ Keperluan:
 - Windows 10/11
 - .NET SDK yang menyokong target `net8.0-windows`
 
-### 1. Pasang Chromium Playwright sekali sahaja
+### First run M2
+
+Pasang dependency, build, pasang Chromium Playwright dan terus buka URLScra dengan satu arahan:
 
 ```powershell
-.\install-browser.ps1
+.\pipeline.ps1 -SetupBrowser
 ```
 
 Jika drive `D:` tersedia, browser disimpan di:
@@ -77,16 +79,10 @@ Jika drive `D:` tersedia, browser disimpan di:
 D:\URLScra\PlaywrightBrowsers
 ```
 
-### 2. Jalankan local pipeline
+### Run biasa selepas setup
 
 ```powershell
 .\pipeline.ps1
-```
-
-Pipeline lokal menjalankan:
-
-```text
-restore -> build Release -> run
 ```
 
 Build sahaja:
@@ -99,6 +95,12 @@ Publish Windows x64:
 
 ```powershell
 .\pipeline.ps1 -Publish
+```
+
+Jika hanya mahu memasang semula Chromium:
+
+```powershell
+.\install-browser.ps1
 ```
 
 GitHub Actions/CI tidak digunakan semasa fasa pembangunan aktif supaya iterasi lebih cepat.
