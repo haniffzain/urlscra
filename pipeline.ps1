@@ -28,7 +28,7 @@ if ($Publish) {
 
     Write-Host "[URLScra] Published: publish\win-x64"
 }
-elif (-not $NoRun) {
+elseif (-not $NoRun) {
     Write-Host "[URLScra] Run"
     dotnet run --project URLScra.csproj -c Release --no-build
 }
