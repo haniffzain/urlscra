@@ -6,6 +6,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Write-Host "[URLScra] Prepare app icon"
+& (Join-Path $PSScriptRoot "ensure-icon.ps1")
+
 Write-Host "[URLScra] Restore"
 dotnet restore URLScra.csproj
 
