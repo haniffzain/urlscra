@@ -5,15 +5,19 @@
     <Application.Resources>
         <SolidColorBrush x:Key="BgBrush" Color="#0F1115"/>
         <SolidColorBrush x:Key="PanelBrush" Color="#171A21"/>
+        <SolidColorBrush x:Key="AltPanelBrush" Color="#14171D"/>
         <SolidColorBrush x:Key="BorderBrush" Color="#2A2F3A"/>
         <SolidColorBrush x:Key="TextBrush" Color="#F4F6F8"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#9DA7B5"/>
         <SolidColorBrush x:Key="AccentBrush" Color="#4F8CFF"/>
+        <SolidColorBrush x:Key="SelectionBrush" Color="#263A5E"/>
+
         <Style TargetType="Window">
             <Setter Property="Background" Value="{StaticResource BgBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
         </Style>
+
         <Style TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
@@ -22,11 +26,66 @@
             <Setter Property="Margin" Value="4"/>
             <Setter Property="Cursor" Value="Hand"/>
         </Style>
+
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="#11151B"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource TextBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="Padding" Value="12,9"/>
+        </Style>
+
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="RowBackground" Value="{StaticResource PanelBrush}"/>
+            <Setter Property="AlternatingRowBackground" Value="{StaticResource AltPanelBrush}"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="VerticalGridLinesBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="RowHeaderWidth" Value="0"/>
+            <Setter Property="AlternationCount" Value="2"/>
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#11151B"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style TargetType="DataGridRow">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+            <Style.Triggers>
+                <Trigger Property="AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="{StaticResource AltPanelBrush}"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="DataGridCell">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Application.Resources>
 </Application>
