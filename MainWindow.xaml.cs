@@ -1,7 +1,11 @@
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using URLScra.Models;
 using URLScra.Services;
 
@@ -12,7 +16,11 @@ public partial class MainWindow : Window
     private readonly ScraperService _scraper = new();
     private readonly SmartScraperService _smartScraper = new();
     private readonly BrowserRenderService _browser = new();
+    private readonly HttpClient _previewHttp = CreatePreviewHttpClient();
+
     private CancellationTokenSource? _analysisCancellation;
+    private CancellationTokenSource? _previewCancellation;
+    private string? _currentPreviewUrl;
 
     public ObservableCollection<ScrapeItem> Results { get; } = new();
     public ObservableCollection<SmartRecord> SmartResults { get; } = new();
@@ -22,10 +30,26 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = this;
         UrlTextBox.Text = "https://example.com";
+
+        SearchCriteriaComboBox.SelectionChanged += PreviewModeComboBox_SelectionChanged;
+        OutputModeComboBox.SelectionChanged += PreviewModeComboBox_SelectionChanged;
+        UpdatePreviewMode();
+        ClearPreview("Select an Image or Video result to preview.");
     }
 
     private bool IsSmartMode =>
         string.Equals(GetSelectedText(OutputModeComboBox, "Raw Data"), "Smart Records", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsPreviewMode
+    {
+        get
+        {
+            if (IsSmartMode) return false;
+            var criterion = GetSelectedText(SearchCriteriaComboBox, "All");
+            return criterion.Equals("Image", StringComparison.OrdinalIgnoreCase) ||
+                   criterion.Equals("Video", StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     private async void AnalyzeButton_Click(object sender, RoutedEventArgs e)
     {
@@ -51,6 +75,8 @@ public partial class MainWindow : Window
         ResultsGrid.Visibility = smartMode ? Visibility.Collapsed : Visibility.Visible;
         SmartResultsGrid.Visibility = smartMode ? Visibility.Visible : Visibility.Collapsed;
         CountText.Text = "0 records";
+        UpdatePreviewMode();
+        ClearPreview("Waiting for results...");
 
         try
         {
@@ -111,6 +137,16 @@ public partial class MainWindow : Window
             ? $"Tiada {criterion} dikesan."
             : $"{criterion} complete · {(usedBrowser ? "Browser" : "Fast HTML")}.";
         ExportButton.IsEnabled = Results.Count > 0;
+
+        if (IsPreviewMode && Results.Count > 0)
+        {
+            ResultsGrid.SelectedIndex = 0;
+            ResultsGrid.ScrollIntoView(Results[0]);
+        }
+        else if (IsPreviewMode)
+        {
+            ClearPreview("No previewable result found.");
+        }
     }
 
     private async Task AnalyzeSmartAsync(
@@ -199,6 +235,261 @@ public partial class MainWindow : Window
             ? selected.Content?.ToString() ?? fallback
             : fallback;
 
+    private void PreviewModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdatePreviewMode();
+        ClearPreview("Select a result to preview.");
+    }
+
+    private void UpdatePreviewMode()
+    {
+        var criterion = GetSelectedText(SearchCriteriaComboBox, "All");
+        var showPreview = !IsSmartMode &&
+                          (criterion.Equals("Image", StringComparison.OrdinalIgnoreCase) ||
+                           criterion.Equals("Video", StringComparison.OrdinalIgnoreCase));
+        var showThumbnails = showPreview && criterion.Equals("Image", StringComparison.OrdinalIgnoreCase);
+
+        PreviewColumn.Width = showPreview ? new GridLength(390) : new GridLength(0);
+        PreviewSplitterColumn.Width = showPreview ? new GridLength(6) : new GridLength(0);
+        PreviewPanel.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
+        PreviewSplitter.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
+        ThumbnailColumn.Visibility = showThumbnails ? Visibility.Visible : Visibility.Collapsed;
+        ResultsGrid.RowHeight = showThumbnails ? 70 : double.NaN;
+    }
+
+    private async void ResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsPreviewMode) return;
+
+        if (ResultsGrid.SelectedItem is not ScrapeItem item)
+        {
+            ClearPreview("Select a result to preview.");
+            return;
+        }
+
+        await ShowPreviewAsync(item);
+    }
+
+    private async Task ShowPreviewAsync(ScrapeItem item)
+    {
+        _previewCancellation?.Cancel();
+        _previewCancellation?.Dispose();
+        _previewCancellation = new CancellationTokenSource();
+        var cancellationToken = _previewCancellation.Token;
+
+        _currentPreviewUrl = item.Value;
+        PreviewTitleText.Text = item.Type.Contains("Video", StringComparison.OrdinalIgnoreCase)
+            ? "Video Preview"
+            : "Image Preview";
+        PreviewTypeText.Text = string.IsNullOrWhiteSpace(item.SourceUrl)
+            ? item.Type
+            : $"{item.Type} · {item.SourceUrl}";
+        PreviewUrlTextBox.Text = item.Value;
+
+        var validUrl = Uri.TryCreate(item.Value, UriKind.Absolute, out var uri) &&
+                       (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+        CopyPreviewUrlButton.IsEnabled = !string.IsNullOrWhiteSpace(item.Value);
+        OpenPreviewUrlButton.IsEnabled = validUrl;
+
+        StopVideoPreview();
+        PreviewImage.Source = null;
+        PreviewImage.Visibility = Visibility.Collapsed;
+        PreviewEmptyText.Visibility = Visibility.Collapsed;
+        VideoControlsPanel.Visibility = Visibility.Collapsed;
+
+        var criterion = GetSelectedText(SearchCriteriaComboBox, "All");
+        var isVideo = criterion.Equals("Video", StringComparison.OrdinalIgnoreCase) ||
+                      item.Type.Contains("Video", StringComparison.OrdinalIgnoreCase);
+
+        if (isVideo)
+        {
+            ShowVideoPreview(item, validUrl ? uri : null);
+            return;
+        }
+
+        await LoadImagePreviewAsync(item.Value, cancellationToken);
+    }
+
+    private async Task LoadImagePreviewAsync(string url, CancellationToken cancellationToken)
+    {
+        PreviewHintText.Text = "Loading image preview...";
+        PreviewImage.Visibility = Visibility.Visible;
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (Uri.TryCreate(UrlTextBox.Text.Trim(), UriKind.Absolute, out var referrer))
+                request.Headers.Referrer = referrer;
+
+            using var response = await _previewHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await using var stream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+
+            PreviewImage.Source = bitmap;
+            PreviewHintText.Text = $"{bitmap.PixelWidth} × {bitmap.PixelHeight} px";
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer preview selection replaced this request.
+        }
+        catch (Exception ex)
+        {
+            PreviewImage.Visibility = Visibility.Collapsed;
+            PreviewEmptyText.Visibility = Visibility.Visible;
+            PreviewEmptyText.Text = "Image preview unavailable.";
+            PreviewHintText.Text = ex.Message;
+        }
+    }
+
+    private void ShowVideoPreview(ScrapeItem item, Uri? uri)
+    {
+        if (uri is null)
+        {
+            PreviewEmptyText.Visibility = Visibility.Visible;
+            PreviewEmptyText.Text = "Invalid video URL.";
+            PreviewHintText.Text = "The URL cannot be played or opened.";
+            return;
+        }
+
+        if (IsStreamOrEmbed(item, uri))
+        {
+            PreviewEmptyText.Visibility = Visibility.Visible;
+            PreviewEmptyText.Text = "Stream / embed detected";
+            PreviewHintText.Text = "Native preview currently supports direct video files. Use Open for this stream/embed; WebView2 preview is planned next.";
+            return;
+        }
+
+        try
+        {
+            VideoPlayer.Visibility = Visibility.Visible;
+            VideoControlsPanel.Visibility = Visibility.Visible;
+            PreviewHintText.Text = "Loading video preview...";
+            VideoPlayer.Source = uri;
+            VideoPlayer.Play();
+        }
+        catch (Exception ex)
+        {
+            StopVideoPreview();
+            PreviewEmptyText.Visibility = Visibility.Visible;
+            PreviewEmptyText.Text = "Video preview unavailable.";
+            PreviewHintText.Text = ex.Message;
+        }
+    }
+
+    private static bool IsStreamOrEmbed(ScrapeItem item, Uri uri)
+    {
+        if (item.Type.Contains("Embed", StringComparison.OrdinalIgnoreCase)) return true;
+
+        var path = uri.AbsolutePath.ToLowerInvariant();
+        if (path.EndsWith(".m3u8") || path.EndsWith(".mpd")) return true;
+
+        var host = uri.Host.ToLowerInvariant();
+        return host.Contains("youtube.com") ||
+               host.Contains("youtu.be") ||
+               host.Contains("vimeo.com");
+    }
+
+    private void VideoPlayer_MediaOpened(object sender, RoutedEventArgs e)
+    {
+        PreviewHintText.Text = VideoPlayer.NaturalVideoWidth > 0 && VideoPlayer.NaturalVideoHeight > 0
+            ? $"Playing · {VideoPlayer.NaturalVideoWidth} × {VideoPlayer.NaturalVideoHeight}"
+            : "Playing video preview.";
+    }
+
+    private void VideoPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e)
+    {
+        StopVideoPreview();
+        PreviewEmptyText.Visibility = Visibility.Visible;
+        PreviewEmptyText.Text = "Native video preview unavailable.";
+        PreviewHintText.Text = "The codec or stream is not supported by the Windows native player. Use Open to inspect it externally.";
+    }
+
+    private void PlayPreviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (VideoPlayer.Source is null) return;
+        VideoPlayer.Play();
+        PreviewHintText.Text = "Playing video preview.";
+    }
+
+    private void PausePreviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (VideoPlayer.Source is null) return;
+        VideoPlayer.Pause();
+        PreviewHintText.Text = "Video paused.";
+    }
+
+    private void StopPreviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (VideoPlayer.Source is null) return;
+        VideoPlayer.Stop();
+        PreviewHintText.Text = "Video stopped.";
+    }
+
+    private void StopVideoPreview()
+    {
+        try
+        {
+            VideoPlayer.Stop();
+        }
+        catch
+        {
+            // Ignore media shutdown errors when switching preview rows.
+        }
+
+        VideoPlayer.Source = null;
+        VideoPlayer.Visibility = Visibility.Collapsed;
+        VideoControlsPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void ClearPreview(string message)
+    {
+        _previewCancellation?.Cancel();
+        _previewCancellation?.Dispose();
+        _previewCancellation = null;
+        _currentPreviewUrl = null;
+
+        StopVideoPreview();
+        PreviewImage.Source = null;
+        PreviewImage.Visibility = Visibility.Collapsed;
+        PreviewEmptyText.Visibility = Visibility.Visible;
+        PreviewEmptyText.Text = message;
+        PreviewTitleText.Text = "Preview";
+        PreviewTypeText.Text = "Image / Video";
+        PreviewHintText.Text = "Select a result to preview.";
+        PreviewUrlTextBox.Text = "";
+        CopyPreviewUrlButton.IsEnabled = false;
+        OpenPreviewUrlButton.IsEnabled = false;
+    }
+
+    private void OpenPreviewUrlButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_currentPreviewUrl)) return;
+        if (!Uri.TryCreate(_currentPreviewUrl, UriKind.Absolute, out var uri)) return;
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) return;
+
+        Process.Start(new ProcessStartInfo(uri.ToString())
+        {
+            UseShellExecute = true
+        });
+    }
+
+    private void CopyPreviewUrlButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_currentPreviewUrl)) return;
+        Clipboard.SetText(_currentPreviewUrl);
+        PreviewHintText.Text = "URL copied to clipboard.";
+    }
+
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         if (_analysisCancellation is null) return;
@@ -227,5 +518,27 @@ public partial class MainWindow : Window
             await CsvExporter.SaveAsync(dialog.FileName, Results);
 
         StatusText.Text = $"CSV saved: {dialog.FileName}";
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _analysisCancellation?.Cancel();
+        _analysisCancellation?.Dispose();
+        _previewCancellation?.Cancel();
+        _previewCancellation?.Dispose();
+        StopVideoPreview();
+        _previewHttp.Dispose();
+        base.OnClosed(e);
+    }
+
+    private static HttpClient CreatePreviewHttpClient()
+    {
+        var client = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 URLScra/0.6");
+        return client;
     }
 }
