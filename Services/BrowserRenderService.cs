@@ -9,6 +9,37 @@ public sealed class BrowserRenderService
     private const int MaxScrollPasses = 12;
     private const int StablePassesToStop = 2;
 
+    private const string RenderedTextScript = """
+        () => {
+            const chunks = [];
+            const skipTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
+
+            const collect = (root) => {
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+                while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    const parent = node.parentElement;
+                    if (parent && skipTags.has(parent.tagName)) continue;
+                    if (parent) {
+                        const style = getComputedStyle(parent);
+                        if (style.display === 'none' || style.visibility === 'hidden') continue;
+                    }
+
+                    const text = (node.nodeValue || '').replace(/\s+/g, ' ').trim();
+                    if (text.length > 1) chunks.push(text);
+                }
+
+                if (!root.querySelectorAll) return;
+                for (const element of root.querySelectorAll('*')) {
+                    if (element.shadowRoot) collect(element.shadowRoot);
+                }
+            };
+
+            collect(document);
+            return chunks.join('\n');
+        }
+        """;
+
     public string BrowserPath { get; }
 
     public BrowserRenderService()
@@ -45,6 +76,7 @@ public sealed class BrowserRenderService
                 var context = await browser.NewContextAsync(new BrowserNewContextOptions
                 {
                     Locale = "en-MY",
+                    JavaScriptEnabled = true,
                     UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 URLScra/0.7.1",
                     ViewportSize = new ViewportSize { Width = 1365, Height = 900 }
                 });
@@ -66,7 +98,6 @@ public sealed class BrowserRenderService
                     catch (PlaywrightException ex) when (IsTimeout(ex))
                     {
                         // Streaming / SPA pages may keep navigation busy even when useful DOM is present.
-                        // Continue if Chromium reached a real page rather than aborting the scrape.
                         if (string.IsNullOrWhiteSpace(page.Url) ||
                             page.Url.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
                             throw;
@@ -85,23 +116,24 @@ public sealed class BrowserRenderService
                     }
                     catch (PlaywrightException ex) when (IsTimeout(ex))
                     {
-                        // Continue and let ContentAsync decide whether useful DOM exists.
+                        // Continue; later capture will decide whether useful content exists.
                     }
 
-                    // Give initial client-side rendering a brief chance to populate the DOM.
-                    await Task.Delay(700, cancellationToken);
+                    await WaitForClientRenderAsync(page, progress, cancellationToken);
 
                     cancellationToken.ThrowIfCancellationRequested();
                     await AdaptiveScrollAsync(page, progress, cancellationToken);
 
-                    progress?.Report("Capturing rendered DOM...");
+                    progress?.Report("Capturing rendered DOM and visible text...");
                     await page.EvaluateAsync("() => window.scrollTo(0, 0)");
-                    await Task.Delay(200, cancellationToken);
+                    await Task.Delay(250, cancellationToken);
 
                     var html = await page.ContentAsync();
+                    var renderedText = await CaptureRenderedTextAsync(page);
                     var finalUrl = string.IsNullOrWhiteSpace(page.Url) ? url : page.Url;
+
                     progress?.Report("Browser rendering complete.");
-                    return new RenderedPage(html, finalUrl);
+                    return new RenderedPage(html, finalUrl, renderedText);
                 }
                 finally
                 {
@@ -121,6 +153,42 @@ public sealed class BrowserRenderService
                 $"Chromium Playwright belum dipasang. Jalankan .\\install-browser.ps1 sekali sahaja. Browser akan disimpan di: {BrowserPath}",
                 ex);
         }
+    }
+
+    private static async Task WaitForClientRenderAsync(
+        IPage page,
+        IProgress<string>? progress,
+        CancellationToken cancellationToken)
+    {
+        string lastText = "";
+
+        for (var pass = 1; pass <= 12; pass++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lastText = await CaptureRenderedTextAsync(page);
+
+            if (lastText.Length >= 180 && !LooksLikeJavaScriptPlaceholder(lastText))
+                return;
+
+            progress?.Report($"Waiting for client content {pass}/12...");
+            await Task.Delay(500, cancellationToken);
+        }
+    }
+
+    private static Task<string> CaptureRenderedTextAsync(IPage page) =>
+        page.EvaluateAsync<string>(RenderedTextScript);
+
+    private static bool LooksLikeJavaScriptPlaceholder(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return true;
+
+        var value = text.ToLowerInvariant();
+        return value.Contains("javascript is required") ||
+               value.Contains("please enable javascript") ||
+               value.Contains("enable javascript") ||
+               value.Contains("requires javascript") ||
+               value.Contains("javascript must be enabled") ||
+               value.Contains("upgrade to a modern browser");
     }
 
     private static bool IsTimeout(PlaywrightException ex) =>
