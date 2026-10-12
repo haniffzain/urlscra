@@ -1,0 +1,78 @@
+param(
+    [switch]$NoRun
+)
+
+$ErrorActionPreference = "Stop"
+$root = $PSScriptRoot
+$branch = "m1-windows-scraper"
+$base = "https://raw.githubusercontent.com/haniffzain/urlscra/$branch/"
+
+Write-Host "[URLScra] Verified development sync" -ForegroundColor Cyan
+Write-Host "[URLScra] Source branch: $branch"
+
+# Stop an older running build so Release output can be replaced cleanly.
+Get-Process URLScra -ErrorAction SilentlyContinue | ForEach-Object {
+    Write-Host "[URLScra] Closing running URLScra process..." -ForegroundColor Yellow
+    Stop-Process -Id $_.Id -Force
+}
+
+$files = @(
+    "App.xaml",
+    "App.xaml.cs",
+    "MainWindow.xaml",
+    "MainWindow.xaml.cs",
+    "URLScra.csproj",
+    "Models/RenderedPage.cs",
+    "Models/ScrapeItem.cs",
+    "Models/SmartRecord.cs",
+    "Services/BrowserRenderService.cs",
+    "Services/CsvExporter.cs",
+    "Services/HtmlDataAnalyzer.cs",
+    "Services/ScraperService.cs",
+    "Services/SmartHtmlAnalyzer.cs",
+    "Services/SmartScraperService.cs",
+    "pipeline.ps1",
+    "install-browser.ps1",
+    "ensure-icon.ps1"
+)
+
+foreach ($file in $files) {
+    $destination = Join-Path $root $file
+    $directory = Split-Path $destination -Parent
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+
+    $temp = "$destination.download"
+    Write-Host "[URLScra] Sync $file"
+    Invoke-WebRequest -UseBasicParsing ($base + $file) -OutFile $temp
+    Move-Item -Force $temp $destination
+}
+
+# Guard against accidentally running the stale pre-M2.3 build again.
+$projectText = Get-Content (Join-Path $root "URLScra.csproj") -Raw
+$windowText = Get-Content (Join-Path $root "MainWindow.xaml") -Raw
+$browserText = Get-Content (Join-Path $root "Services\BrowserRenderService.cs") -Raw
+
+if ($projectText -notmatch '<Version>0\.7\.1</Version>') {
+    throw "Sync verification failed: expected URLScra version 0.7.1."
+}
+
+if ($windowText -notmatch 'Extract\. Preview\. Save\.') {
+    throw "Sync verification failed: M2.3 UI was not downloaded."
+}
+
+if ($browserText -match 'NetworkIdle') {
+    throw "Sync verification failed: stale BrowserRenderService still contains NetworkIdle."
+}
+
+Write-Host "[URLScra] SYNC VERIFIED: v0.7.1 / M2.3 UI / browser timeout fix" -ForegroundColor Green
+
+Write-Host "[URLScra] Clean old build output"
+dotnet clean (Join-Path $root "URLScra.csproj") -c Release | Out-Host
+Remove-Item -Recurse -Force (Join-Path $root "bin"), (Join-Path $root "obj") -ErrorAction SilentlyContinue
+
+if ($NoRun) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "pipeline.ps1") -NoRun
+}
+else {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "pipeline.ps1")
+}
