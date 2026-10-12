@@ -7,6 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>URLScra</AssemblyName>
     <RootNamespace>URLScra</RootNamespace>
+    <ApplicationIcon>Assets\urlscra.ico</ApplicationIcon>
+    <Product>URLScra</Product>
+    <Version>0.7.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AngleSharp" Version="1.8.4" />
