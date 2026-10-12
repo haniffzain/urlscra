@@ -3,17 +3,51 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <SolidColorBrush x:Key="BgBrush" Color="#0F1115"/>
-        <SolidColorBrush x:Key="PanelBrush" Color="#171A21"/>
-        <SolidColorBrush x:Key="AltPanelBrush" Color="#14171D"/>
-        <SolidColorBrush x:Key="BorderBrush" Color="#2A2F3A"/>
-        <SolidColorBrush x:Key="TextBrush" Color="#F4F6F8"/>
-        <SolidColorBrush x:Key="MutedBrush" Color="#9DA7B5"/>
-        <SolidColorBrush x:Key="AccentBrush" Color="#4F8CFF"/>
-        <SolidColorBrush x:Key="AccentHoverBrush" Color="#6A9DFF"/>
-        <SolidColorBrush x:Key="SelectionBrush" Color="#263A5E"/>
-        <SolidColorBrush x:Key="DisabledBrush" Color="#222731"/>
-        <SolidColorBrush x:Key="DisabledTextBrush" Color="#697483"/>
+        <!-- High-contrast URLScra dark palette -->
+        <SolidColorBrush x:Key="BgBrush" Color="#080C14"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#111827"/>
+        <SolidColorBrush x:Key="AltPanelBrush" Color="#0D1422"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#35435A"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#F8FAFC"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#C7D2E2"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#3478F6"/>
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="#5793FF"/>
+        <SolidColorBrush x:Key="SelectionBrush" Color="#204C91"/>
+        <SolidColorBrush x:Key="DisabledBrush" Color="#1B2534"/>
+        <SolidColorBrush x:Key="DisabledTextBrush" Color="#8897AA"/>
+
+        <!-- Vector app icon: dark tile + two linked scan strokes -->
+        <DrawingImage x:Key="URLScraAppIcon">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="#0B1220">
+                        <GeometryDrawing.Geometry>
+                            <RectangleGeometry Rect="0,0,32,32" RadiusX="7" RadiusY="7"/>
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                    <GeometryDrawing Geometry="M7,18 C5.2,16.2 5.2,13.2 7,11.4 L10.4,8 C12.4,6 15.5,6 17.4,8">
+                        <GeometryDrawing.Pen>
+                            <Pen Brush="#60A5FA" Thickness="3.2" StartLineCap="Round" EndLineCap="Round" LineJoin="Round"/>
+                        </GeometryDrawing.Pen>
+                    </GeometryDrawing>
+                    <GeometryDrawing Geometry="M14.6,24 C16.6,26 19.6,26 21.6,24 L25,20.6 C26.8,18.8 26.8,15.8 25,14">
+                        <GeometryDrawing.Pen>
+                            <Pen Brush="#60A5FA" Thickness="3.2" StartLineCap="Round" EndLineCap="Round" LineJoin="Round"/>
+                        </GeometryDrawing.Pen>
+                    </GeometryDrawing>
+                    <GeometryDrawing Geometry="M12,20 L20,12">
+                        <GeometryDrawing.Pen>
+                            <Pen Brush="#F8FAFC" Thickness="2.2" StartLineCap="Round" EndLineCap="Round"/>
+                        </GeometryDrawing.Pen>
+                    </GeometryDrawing>
+                    <GeometryDrawing Brush="#34D399">
+                        <GeometryDrawing.Geometry>
+                            <EllipseGeometry Center="24.5,7.5" RadiusX="2.2" RadiusY="2.2"/>
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
 
         <Style TargetType="Window">
             <Setter Property="Background" Value="{StaticResource BgBrush}"/>
@@ -24,11 +58,12 @@
         <Style TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderBrush" Value="#6AA0FF"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="16,10"/>
             <Setter Property="Margin" Value="4"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -36,7 +71,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4"
+                                CornerRadius="5"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
@@ -45,9 +80,10 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource AccentHoverBrush}"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#9CBFFF"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.78"/>
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.80"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource DisabledBrush}"/>
@@ -62,12 +98,13 @@
         </Style>
 
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#11151B"/>
+            <Setter Property="Background" Value="#0B1220"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="CaretBrush" Value="{StaticResource TextBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="SelectionBrush" Value="#315EAE"/>
         </Style>
 
         <Style TargetType="ComboBoxItem">
@@ -85,10 +122,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource SelectionBrush}"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#233B63"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#304A78"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#28579F"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="{StaticResource DisabledTextBrush}"/>
@@ -100,7 +137,7 @@
         </Style>
 
         <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="#11151B"/>
+            <Setter Property="Background" Value="#0B1220"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -114,7 +151,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="4">
+                                    CornerRadius="5">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -135,7 +172,7 @@
                                                   IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
                                         <TextBlock Text="▼"
                                                    FontSize="9"
-                                                   Foreground="{StaticResource MutedBrush}"
+                                                   Foreground="#DDE7F4"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"/>
                                     </ToggleButton>
@@ -149,9 +186,9 @@
                                    Focusable="False"
                                    PopupAnimation="Fade">
                                 <Border Background="{StaticResource PanelBrush}"
-                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderBrush="#52617A"
                                         BorderThickness="1"
-                                        CornerRadius="4"
+                                        CornerRadius="5"
                                         MinWidth="180"
                                         MaxHeight="420">
                                     <ScrollViewer Margin="0,4"
@@ -164,10 +201,10 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ComboBorder" Property="BorderBrush" Value="#3A4960"/>
+                                <Setter TargetName="ComboBorder" Property="BorderBrush" Value="#7084A4"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter TargetName="ComboBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="ComboBorder" Property="BorderBrush" Value="#75A7FF"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ComboBorder" Property="Background" Value="{StaticResource DisabledBrush}"/>
@@ -184,8 +221,8 @@
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="RowBackground" Value="{StaticResource PanelBrush}"/>
             <Setter Property="AlternatingRowBackground" Value="{StaticResource AltPanelBrush}"/>
-            <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource BorderBrush}"/>
-            <Setter Property="VerticalGridLinesBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="#2D3A4E"/>
+            <Setter Property="VerticalGridLinesBrush" Value="#2D3A4E"/>
             <Setter Property="GridLinesVisibility" Value="Horizontal"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -195,11 +232,11 @@
         </Style>
 
         <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Background" Value="#11151B"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Background" Value="#0A101B"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="0,0,1,1"/>
-            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Padding" Value="10,9"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
 
@@ -220,7 +257,7 @@
         <Style TargetType="DataGridCell">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderBrush" Value="#2D3A4E"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="Padding" Value="8,6"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
