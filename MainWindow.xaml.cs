@@ -217,7 +217,12 @@ public partial class MainWindow : Window
     private static bool NeedsBrowserFallback(IReadOnlyList<ScrapeItem> items, string criterion)
     {
         if (items.Count == 0) return true;
-        if (!criterion.Equals("All", StringComparison.OrdinalIgnoreCase)) return false;
+
+        if (items.Any(IsJavaScriptPlaceholder))
+            return true;
+
+        if (!criterion.Equals("All", StringComparison.OrdinalIgnoreCase))
+            return false;
 
         var usefulTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -226,6 +231,31 @@ public partial class MainWindow : Window
         };
 
         return items.Count < 3 || !items.Any(item => usefulTypes.Contains(item.Type));
+    }
+
+    private static bool IsJavaScriptPlaceholder(ScrapeItem item)
+    {
+        if (!item.Type.Equals("Text", StringComparison.OrdinalIgnoreCase) &&
+            !item.Type.Equals("Title", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var value = item.Value?.Trim() ?? string.Empty;
+        if (value.Length == 0) return false;
+
+        var markers = new[]
+        {
+            "javascript is required",
+            "javascript required",
+            "enable javascript",
+            "please enable javascript",
+            "requires javascript",
+            "need to enable javascript",
+            "turn on javascript",
+            "upgrade to a modern browser",
+            "browser does not support javascript"
+        };
+
+        return markers.Any(marker => value.Contains(marker, StringComparison.OrdinalIgnoreCase));
     }
 
     private void SetControlsEnabled(bool enabled)
