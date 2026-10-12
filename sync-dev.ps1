@@ -52,15 +52,15 @@ $projectText = Get-Content (Join-Path $root "URLScra.csproj") -Raw
 $windowText = Get-Content (Join-Path $root "MainWindow.xaml") -Raw
 $browserText = Get-Content (Join-Path $root "Services\BrowserRenderService.cs") -Raw
 
-if ($projectText -notmatch '<Version>0\.7\.1</Version>') {
+if (-not $projectText.Contains('<Version>0.7.1</Version>')) {
     throw "Sync verification failed: expected URLScra version 0.7.1."
 }
 
-if ($windowText -notmatch 'Extract\. Preview\. Save\.') {
+if (-not $windowText.Contains('Extract. Preview. Save.')) {
     throw "Sync verification failed: M2.3 UI was not downloaded."
 }
 
-if ($browserText -match 'NetworkIdle') {
+if ($browserText.Contains('NetworkIdle')) {
     throw "Sync verification failed: stale BrowserRenderService still contains NetworkIdle."
 }
 
