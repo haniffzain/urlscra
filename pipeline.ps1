@@ -6,11 +6,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Assert-LastExitCode {
-    param([string]$Step)
+function Assert-ExitCode {
+    param(
+        [int]$Code,
+        [string]$Step
+    )
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "[URLScra] $Step failed with exit code $LASTEXITCODE."
+    if ($Code -ne 0) {
+        throw "[URLScra] $Step failed with exit code $Code."
     }
 }
 
@@ -19,18 +22,15 @@ Write-Host "[URLScra] Prepare app icon"
 
 Write-Host "[URLScra] Restore"
 dotnet restore URLScra.csproj
-Assert-LastExitCode "Restore"
+Assert-ExitCode $LASTEXITCODE "Restore"
 
 Write-Host "[URLScra] Build Release"
 dotnet build URLScra.csproj -c Release --no-restore
-Assert-LastExitCode "Build Release"
+Assert-ExitCode $LASTEXITCODE "Build Release"
 
 if ($SetupBrowser) {
     Write-Host "[URLScra] Setup Playwright Chromium"
     & (Join-Path $PSScriptRoot "install-browser.ps1") -SkipBuild
-    if ($LASTEXITCODE -ne 0) {
-        throw "[URLScra] Browser setup failed with exit code $LASTEXITCODE."
-    }
 }
 
 if ($Publish) {
@@ -41,14 +41,14 @@ if ($Publish) {
         --self-contained false `
         --no-build `
         -o publish\win-x64
-    Assert-LastExitCode "Publish win-x64"
+    Assert-ExitCode $LASTEXITCODE "Publish win-x64"
 
     Write-Host "[URLScra] Published: publish\win-x64"
 }
-elif (-not $NoRun) {
+elseif (-not $NoRun) {
     Write-Host "[URLScra] Run"
     dotnet run --project URLScra.csproj -c Release --no-build
-    Assert-LastExitCode "Run"
+    Assert-ExitCode $LASTEXITCODE "Run"
 }
 
 Write-Host "[URLScra] Pipeline complete" -ForegroundColor Green
