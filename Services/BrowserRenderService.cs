@@ -45,7 +45,7 @@ public sealed class BrowserRenderService
                 var context = await browser.NewContextAsync(new BrowserNewContextOptions
                 {
                     Locale = "en-MY",
-                    UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 URLScra/0.5",
+                    UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 URLScra/0.7.1",
                     ViewportSize = new ViewportSize { Width = 1365, Height = 900 }
                 });
 
@@ -63,10 +63,10 @@ public sealed class BrowserRenderService
                             Timeout = 30000
                         });
                     }
-                    catch (Microsoft.Playwright.TimeoutException)
+                    catch (PlaywrightException ex) when (IsTimeout(ex))
                     {
-                        // Some streaming / SPA pages keep navigation busy even though useful DOM is already present.
-                        // Continue if Chromium has reached a real page rather than aborting the scrape.
+                        // Streaming / SPA pages may keep navigation busy even when useful DOM is present.
+                        // Continue if Chromium reached a real page rather than aborting the scrape.
                         if (string.IsNullOrWhiteSpace(page.Url) ||
                             page.Url.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
                             throw;
@@ -83,7 +83,7 @@ public sealed class BrowserRenderService
                             Timeout = 5000
                         });
                     }
-                    catch (Microsoft.Playwright.TimeoutException)
+                    catch (PlaywrightException ex) when (IsTimeout(ex))
                     {
                         // Continue and let ContentAsync decide whether useful DOM exists.
                     }
@@ -122,6 +122,11 @@ public sealed class BrowserRenderService
                 ex);
         }
     }
+
+    private static bool IsTimeout(PlaywrightException ex) =>
+        ex.Message.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("exceeded", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("timed out", StringComparison.OrdinalIgnoreCase);
 
     private static async Task AdaptiveScrollAsync(
         IPage page,
