@@ -1,10 +1,12 @@
 # URLScra
 
-**Paste URL. Choose engine. Get data.**
+**Extract. Preview. Save.**
 
-URLScra ialah aplikasi desktop Windows untuk mengekstrak data daripada halaman web, termasuk laman yang memerlukan JavaScript, dan memaparkan hasil sebelum eksport ke CSV.
+URLScra ialah aplikasi desktop Windows untuk mengekstrak data daripada halaman web, termasuk laman yang memerlukan JavaScript, memaparkan hasil dalam UI dan membenarkan pengguna preview atau menyimpan resource yang dipilih.
 
-## M2.2 engine & preview
+## M2.3 workspace
+
+UI menggunakan tema dark high-contrast dengan command bar, results table, preview workspace dan status footer.
 
 URLScra mempunyai tiga pilihan engine:
 
@@ -14,13 +16,15 @@ URLScra mempunyai tiga pilihan engine:
 
 Browser mode melaporkan status seperti `Loading`, `Waiting`, `Auto-scroll` dan `Capturing DOM`. Analisis juga boleh dihentikan menggunakan butang **Cancel**.
 
-M2.2 menambah preview untuk hasil media:
+### Preview workspace
 
 - **Image** — thumbnail dalam senarai dan preview besar di panel kanan.
 - **Video** — direct video cuba dimainkan dengan player native WPF; stream/embed dipaparkan sebagai URL untuk dibuka secara luaran.
-- **Copy URL / Open** — tersedia pada panel preview.
+- **PDF** — panel PDF khas dengan Open, Copy URL dan Save As.
+- **Save As** — resource yang dipilih boleh dimuat turun secara manual.
+- **Open / Copy URL** — tersedia pada panel preview.
 
-UI menggunakan tema dark high-contrast supaya teks, label, dropdown, border dan selected row lebih mudah dibaca.
+URLScra juga mempunyai ikon vector dalam UI dan ikon Windows `.ico` yang dijana oleh local pipeline untuk EXE/taskbar.
 
 ## Output mode
 
@@ -78,7 +82,7 @@ Keperluan:
 
 ### First run M2
 
-Pasang dependency, build, pasang Chromium Playwright dan terus buka URLScra dengan satu arahan:
+Pipeline menjana ikon app, restore dependency, build, dan boleh memasang Chromium Playwright:
 
 ```powershell
 .\pipeline.ps1 -SetupBrowser
@@ -114,7 +118,7 @@ Jika hanya mahu memasang semula Chromium:
 .\install-browser.ps1
 ```
 
-GitHub Actions/CI tidak digunakan semasa fasa pembangunan aktif supaya iterasi lebih cepat.
+GitHub Actions/CI tidak digunakan semasa fasa pembangunan aktif supaya iterasi lebih cepat. Local pipeline ialah gate pembangunan semasa.
 
 ## Penggunaan yang bertanggungjawab
 
