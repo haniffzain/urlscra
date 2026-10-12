@@ -34,20 +34,23 @@ public partial class MainWindow : Window
         SearchCriteriaComboBox.SelectionChanged += PreviewModeComboBox_SelectionChanged;
         OutputModeComboBox.SelectionChanged += PreviewModeComboBox_SelectionChanged;
         UpdatePreviewMode();
-        ClearPreview("Select an Image or Video result to preview.");
+        ClearPreview("Select an Image, Video or PDF result to preview.");
     }
 
     private bool IsSmartMode =>
         string.Equals(GetSelectedText(OutputModeComboBox, "Raw Data"), "Smart Records", StringComparison.OrdinalIgnoreCase);
+
+    private string SelectedCriterion => GetSelectedText(SearchCriteriaComboBox, "All");
 
     private bool IsPreviewMode
     {
         get
         {
             if (IsSmartMode) return false;
-            var criterion = GetSelectedText(SearchCriteriaComboBox, "All");
+            var criterion = SelectedCriterion;
             return criterion.Equals("Image", StringComparison.OrdinalIgnoreCase) ||
-                   criterion.Equals("Video", StringComparison.OrdinalIgnoreCase);
+                   criterion.Equals("Video", StringComparison.OrdinalIgnoreCase) ||
+                   criterion.Equals("PDF", StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -60,7 +63,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var criterion = GetSelectedText(SearchCriteriaComboBox, "All");
+        var criterion = SelectedCriterion;
         var engine = GetSelectedText(EngineComboBox, "Auto");
         var smartMode = IsSmartMode;
 
@@ -131,7 +134,9 @@ public partial class MainWindow : Window
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        foreach (var item in items) Results.Add(item);
+        foreach (var item in items)
+            Results.Add(item);
+
         CountText.Text = $"{Results.Count} records";
         StatusText.Text = Results.Count == 0
             ? $"Tiada {criterion} dikesan."
@@ -176,7 +181,9 @@ public partial class MainWindow : Window
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        foreach (var record in records) SmartResults.Add(record);
+        foreach (var record in records)
+            SmartResults.Add(record);
+
         CountText.Text = $"{SmartResults.Count} smart records";
         StatusText.Text = SmartResults.Count == 0
             ? "Tiada smart record dikesan."
@@ -214,7 +221,7 @@ public partial class MainWindow : Window
 
         var usefulTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "Text", "Price", "Image", "Video", "Audio", "Link", "Email", "Phone",
+            "Text", "Price", "Image", "Video", "Audio", "Link", "Email", "Phone", "PDF",
             "Product Name", "Product Price", "Table Row"
         };
 
@@ -227,7 +234,8 @@ public partial class MainWindow : Window
         EngineComboBox.IsEnabled = enabled;
         OutputModeComboBox.IsEnabled = enabled;
         SearchCriteriaComboBox.IsEnabled = enabled;
-        if (!enabled) ExportButton.IsEnabled = false;
+        if (!enabled)
+            ExportButton.IsEnabled = false;
     }
 
     private static string GetSelectedText(ComboBox comboBox, string fallback) =>
@@ -243,13 +251,14 @@ public partial class MainWindow : Window
 
     private void UpdatePreviewMode()
     {
-        var criterion = GetSelectedText(SearchCriteriaComboBox, "All");
+        var criterion = SelectedCriterion;
         var showPreview = !IsSmartMode &&
                           (criterion.Equals("Image", StringComparison.OrdinalIgnoreCase) ||
-                           criterion.Equals("Video", StringComparison.OrdinalIgnoreCase));
+                           criterion.Equals("Video", StringComparison.OrdinalIgnoreCase) ||
+                           criterion.Equals("PDF", StringComparison.OrdinalIgnoreCase));
         var showThumbnails = showPreview && criterion.Equals("Image", StringComparison.OrdinalIgnoreCase);
 
-        PreviewColumn.Width = showPreview ? new GridLength(390) : new GridLength(0);
+        PreviewColumn.Width = showPreview ? new GridLength(430) : new GridLength(0);
         PreviewSplitterColumn.Width = showPreview ? new GridLength(6) : new GridLength(0);
         PreviewPanel.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
         PreviewSplitter.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
@@ -277,10 +286,18 @@ public partial class MainWindow : Window
         _previewCancellation = new CancellationTokenSource();
         var cancellationToken = _previewCancellation.Token;
 
+        var criterion = SelectedCriterion;
+        var isPdf = criterion.Equals("PDF", StringComparison.OrdinalIgnoreCase) ||
+                    item.Type.Equals("PDF", StringComparison.OrdinalIgnoreCase);
+        var isVideo = criterion.Equals("Video", StringComparison.OrdinalIgnoreCase) ||
+                      item.Type.Contains("Video", StringComparison.OrdinalIgnoreCase);
+
         _currentPreviewUrl = item.Value;
-        PreviewTitleText.Text = item.Type.Contains("Video", StringComparison.OrdinalIgnoreCase)
-            ? "Video Preview"
-            : "Image Preview";
+        PreviewTitleText.Text = isPdf
+            ? "PDF Preview"
+            : isVideo
+                ? "Video Preview"
+                : "Image Preview";
         PreviewTypeText.Text = string.IsNullOrWhiteSpace(item.SourceUrl)
             ? item.Type
             : $"{item.Type} · {item.SourceUrl}";
@@ -290,16 +307,20 @@ public partial class MainWindow : Window
                        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
         CopyPreviewUrlButton.IsEnabled = !string.IsNullOrWhiteSpace(item.Value);
         OpenPreviewUrlButton.IsEnabled = validUrl;
+        SavePreviewButton.IsEnabled = validUrl;
 
         StopVideoPreview();
         PreviewImage.Source = null;
         PreviewImage.Visibility = Visibility.Collapsed;
+        PdfPreviewPanel.Visibility = Visibility.Collapsed;
         PreviewEmptyText.Visibility = Visibility.Collapsed;
         VideoControlsPanel.Visibility = Visibility.Collapsed;
 
-        var criterion = GetSelectedText(SearchCriteriaComboBox, "All");
-        var isVideo = criterion.Equals("Video", StringComparison.OrdinalIgnoreCase) ||
-                      item.Type.Contains("Video", StringComparison.OrdinalIgnoreCase);
+        if (isPdf)
+        {
+            ShowPdfPreview(validUrl ? uri : null);
+            return;
+        }
 
         if (isVideo)
         {
@@ -351,6 +372,20 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ShowPdfPreview(Uri? uri)
+    {
+        if (uri is null)
+        {
+            PreviewEmptyText.Visibility = Visibility.Visible;
+            PreviewEmptyText.Text = "Invalid PDF URL.";
+            PreviewHintText.Text = "The PDF URL cannot be opened or saved.";
+            return;
+        }
+
+        PdfPreviewPanel.Visibility = Visibility.Visible;
+        PreviewHintText.Text = "PDF detected · use Open to view it or Save As to keep a copy.";
+    }
+
     private void ShowVideoPreview(ScrapeItem item, Uri? uri)
     {
         if (uri is null)
@@ -365,7 +400,7 @@ public partial class MainWindow : Window
         {
             PreviewEmptyText.Visibility = Visibility.Visible;
             PreviewEmptyText.Text = "Stream / embed detected";
-            PreviewHintText.Text = "Native preview currently supports direct video files. Use Open for this stream/embed; WebView2 preview is planned next.";
+            PreviewHintText.Text = "Native preview supports direct video files. Use Open for this stream/embed; browser preview is planned next.";
             return;
         }
 
@@ -461,14 +496,16 @@ public partial class MainWindow : Window
         StopVideoPreview();
         PreviewImage.Source = null;
         PreviewImage.Visibility = Visibility.Collapsed;
+        PdfPreviewPanel.Visibility = Visibility.Collapsed;
         PreviewEmptyText.Visibility = Visibility.Visible;
         PreviewEmptyText.Text = message;
         PreviewTitleText.Text = "Preview";
-        PreviewTypeText.Text = "Image / Video";
+        PreviewTypeText.Text = "Image / Video / PDF";
         PreviewHintText.Text = "Select a result to preview.";
         PreviewUrlTextBox.Text = "";
         CopyPreviewUrlButton.IsEnabled = false;
         OpenPreviewUrlButton.IsEnabled = false;
+        SavePreviewButton.IsEnabled = false;
     }
 
     private void OpenPreviewUrlButton_Click(object sender, RoutedEventArgs e)
@@ -488,6 +525,70 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(_currentPreviewUrl)) return;
         Clipboard.SetText(_currentPreviewUrl);
         PreviewHintText.Text = "URL copied to clipboard.";
+    }
+
+    private async void SavePreviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_currentPreviewUrl)) return;
+        if (!Uri.TryCreate(_currentPreviewUrl, UriKind.Absolute, out var uri)) return;
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) return;
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save selected resource",
+            FileName = SuggestFileName(uri, SelectedCriterion),
+            Filter = "All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        SavePreviewButton.IsEnabled = false;
+        PreviewHintText.Text = "Downloading selected resource...";
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            if (Uri.TryCreate(UrlTextBox.Text.Trim(), UriKind.Absolute, out var referrer))
+                request.Headers.Referrer = referrer;
+
+            using var response = await _previewHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            await using var source = await response.Content.ReadAsStreamAsync();
+            await using var destination = File.Create(dialog.FileName);
+            await source.CopyToAsync(destination);
+
+            PreviewHintText.Text = $"Saved: {dialog.FileName}";
+        }
+        catch (Exception ex)
+        {
+            PreviewHintText.Text = $"Save failed: {ex.Message}";
+            MessageBox.Show(ex.Message, "URLScra Save", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            SavePreviewButton.IsEnabled = true;
+        }
+    }
+
+    private static string SuggestFileName(Uri uri, string criterion)
+    {
+        var name = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath));
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = criterion.Equals("PDF", StringComparison.OrdinalIgnoreCase)
+                ? "urlscra-document.pdf"
+                : criterion.Equals("Image", StringComparison.OrdinalIgnoreCase)
+                    ? "urlscra-image"
+                    : criterion.Equals("Video", StringComparison.OrdinalIgnoreCase)
+                        ? "urlscra-video"
+                        : "urlscra-resource";
+        }
+
+        foreach (var invalid in Path.GetInvalidFileNameChars())
+            name = name.Replace(invalid, '_');
+
+        return name;
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
@@ -535,10 +636,10 @@ public partial class MainWindow : Window
     {
         var client = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(15)
+            Timeout = TimeSpan.FromSeconds(90)
         };
         client.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 URLScra/0.6");
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 URLScra/0.7");
         return client;
     }
 }
