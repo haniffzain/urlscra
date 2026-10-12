@@ -19,7 +19,7 @@
         <Grid Grid.Row="1" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="165"/>
+                <ColumnDefinition Width="190"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
@@ -41,13 +41,23 @@
                       BorderBrush="{StaticResource BorderBrush}"
                       ToolTip="Pilih jenis data yang hendak dicari">
                 <ComboBoxItem Content="All"/>
-                <ComboBoxItem Content="Image"/>
+                <ComboBoxItem Content="Text"/>
+                <ComboBoxItem Content="Title"/>
                 <ComboBoxItem Content="Price"/>
+                <ComboBoxItem Content="Image"/>
                 <ComboBoxItem Content="Video"/>
+                <ComboBoxItem Content="Audio"/>
                 <ComboBoxItem Content="Link"/>
-                <ComboBoxItem Content="Doc"/>
-                <ComboBoxItem Content="CSV"/>
                 <ComboBoxItem Content="Email"/>
+                <ComboBoxItem Content="Phone"/>
+                <ComboBoxItem Content="Document"/>
+                <ComboBoxItem Content="CSV"/>
+                <ComboBoxItem Content="JSON"/>
+                <ComboBoxItem Content="Table"/>
+                <ComboBoxItem Content="Product"/>
+                <ComboBoxItem Content="Metadata"/>
+                <ComboBoxItem Content="Social"/>
+                <ComboBoxItem Content="Downloadable File"/>
             </ComboBox>
 
             <Button x:Name="AnalyzeButton"
@@ -69,7 +79,7 @@
                       CanUserAddRows="False" CanUserDeleteRows="False" RowHeaderWidth="0" HeadersVisibility="Column"
                       Background="{StaticResource PanelBrush}" Foreground="{StaticResource TextBrush}" BorderThickness="0">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="140"/>
+                    <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="160"/>
                     <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
                     <DataGridTextColumn Header="Source / Label" Binding="{Binding SourceUrl}" Width="300"/>
                 </DataGrid.Columns>
