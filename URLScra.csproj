@@ -9,10 +9,20 @@
     <RootNamespace>URLScra</RootNamespace>
     <ApplicationIcon>Assets\urlscra.ico</ApplicationIcon>
     <Product>URLScra</Product>
-    <Version>0.7.1</Version>
+    <Version>0.7.2</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AngleSharp" Version="1.8.4" />
     <PackageReference Include="Microsoft.Playwright" Version="1.63.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\adblock\urlscra-base.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <None Include="native\bin\urlscra_adblock.dll"
+          Condition="Exists('native\bin\urlscra_adblock.dll')"
+          Link="urlscra_adblock.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
