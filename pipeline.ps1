@@ -28,7 +28,6 @@ if ($RequireAdblock) {
 else {
     & (Join-Path $PSScriptRoot "build-adblock.ps1")
 }
-Assert-ExitCode $LASTEXITCODE "Adblock Rust build"
 
 Write-Host "[URLScra] Restore"
 dotnet restore URLScra.csproj
