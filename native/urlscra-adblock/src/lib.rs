@@ -10,12 +10,15 @@ pub struct UrlScraAdblock {
     engine: Engine,
 }
 
-fn read_utf8<'a>(value: *const c_char) -> Option<&'a str> {
+fn read_utf8(value: *const c_char) -> Option<String> {
     if value.is_null() {
         return None;
     }
 
-    unsafe { CStr::from_ptr(value) }.to_str().ok()
+    unsafe { CStr::from_ptr(value) }
+        .to_str()
+        .ok()
+        .map(str::to_owned)
 }
 
 #[no_mangle]
@@ -26,7 +29,7 @@ pub extern "C" fn urlscra_adblock_create(rules: *const c_char) -> *mut UrlScraAd
             _ => return ptr::null_mut(),
         };
 
-        let engine = Engine::new_with_list_text(rules.to_owned());
+        let engine = Engine::new_with_list_text(rules);
         Box::into_raw(Box::new(UrlScraAdblock { engine }))
     }))
     .unwrap_or(ptr::null_mut())
@@ -60,9 +63,9 @@ pub extern "C" fn urlscra_adblock_should_block(
             Some(value) => value,
             None => return 0,
         };
-        let source_url = read_utf8(source_url).unwrap_or(url);
-        let resource_type = read_utf8(resource_type).unwrap_or("other");
-        let method = read_utf8(method).unwrap_or("get");
+        let source_url = read_utf8(source_url).unwrap_or_else(|| url.clone());
+        let resource_type = read_utf8(resource_type).unwrap_or_else(|| "other".to_string());
+        let method = read_utf8(method).unwrap_or_else(|| "get".to_string());
 
         // Always allow the top-level document. URLScra uses adblock-rust to reduce
         // third-party noise, not to prevent the user-requested page from loading.
@@ -71,7 +74,7 @@ pub extern "C" fn urlscra_adblock_should_block(
             return 0;
         }
 
-        let request = match Request::new(url, source_url, resource_type, method) {
+        let request = match Request::new(&url, &source_url, &resource_type, &method) {
             Ok(request) => request,
             Err(_) => return 0,
         };
