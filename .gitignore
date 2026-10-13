@@ -6,3 +6,5 @@ obj/
 *.cache
 *.log
 Assets/urlscra.ico
+native/urlscra-adblock/target/
+native/bin/
