@@ -10,6 +10,8 @@ public sealed class BrowserRenderService
     private const int MaxScrollPasses = 12;
     private const int StablePassesToStop = 2;
 
+    private readonly AdblockRustService _adblock = new();
+
     private const string RenderedTextScript = """
         () => {
             const chunks = [];
@@ -115,6 +117,7 @@ public sealed class BrowserRenderService
         """;
 
     public string BrowserPath { get; }
+    public string AdblockStatus => _adblock.Status;
 
     public BrowserRenderService()
     {
@@ -132,6 +135,7 @@ public sealed class BrowserRenderService
             throw new ArgumentException("URL mesti bermula dengan http:// atau https://");
 
         Environment.SetEnvironmentVariable("PLAYWRIGHT_BROWSERS_PATH", BrowserPath);
+        _adblock.ResetBlockedCount();
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report("Launching Chromium...");
 
@@ -151,12 +155,52 @@ public sealed class BrowserRenderService
                 {
                     Locale = "en-MY",
                     JavaScriptEnabled = true,
-                    UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 URLScra/0.7.1",
+                    ServiceWorkers = ServiceWorkerPolicy.Block,
+                    UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 URLScra/0.7.2",
                     ViewportSize = new ViewportSize { Width = 1365, Height = 900 }
                 });
 
                 try
                 {
+                    if (_adblock.IsAvailable)
+                    {
+                        progress?.Report("Adblock Rust active · filtering ads and trackers...");
+                        await context.RouteAsync("**/*", async route =>
+                        {
+                            try
+                            {
+                                var request = route.Request;
+                                var sourceUrl = request.Frame.Url;
+                                if (string.IsNullOrWhiteSpace(sourceUrl) ||
+                                    sourceUrl.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    sourceUrl = url;
+                                }
+
+                                if (_adblock.ShouldBlock(
+                                        request.Url,
+                                        sourceUrl,
+                                        request.ResourceType,
+                                        request.Method))
+                                {
+                                    await route.AbortAsync("blockedbyclient");
+                                    return;
+                                }
+                            }
+                            catch
+                            {
+                                // The blocker is deliberately best-effort. A bad rule or native
+                                // bridge failure must never stop the requested page from loading.
+                            }
+
+                            await route.ContinueAsync();
+                        });
+                    }
+                    else
+                    {
+                        progress?.Report($"{_adblock.Status} · continuing without request filtering.");
+                    }
+
                     var page = await context.NewPageAsync();
                     page.SetDefaultTimeout(15000);
 
@@ -209,7 +253,11 @@ public sealed class BrowserRenderService
                     var augmentedHtml = AppendRenderedText(html, renderedText);
                     augmentedHtml = AppendRenderedImages(augmentedHtml, renderedImages);
 
-                    progress?.Report($"Browser rendering complete · {renderedImages.Count} image resources captured.");
+                    var blockerSummary = _adblock.IsAvailable
+                        ? $"{_adblock.BlockedCount} ads/trackers blocked"
+                        : "adblock unavailable";
+                    progress?.Report(
+                        $"Browser rendering complete · {blockerSummary} · {renderedImages.Count} image resources captured.");
                     return new RenderedPage(augmentedHtml, finalUrl, renderedText);
                 }
                 finally
