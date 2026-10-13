@@ -1,7 +1,8 @@
 param(
     [switch]$Publish,
     [switch]$NoRun,
-    [switch]$SetupBrowser
+    [switch]$SetupBrowser,
+    [switch]$RequireAdblock
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +20,15 @@ function Assert-ExitCode {
 
 Write-Host "[URLScra] Prepare app icon"
 & (Join-Path $PSScriptRoot "ensure-icon.ps1")
+
+Write-Host "[URLScra] Prepare adblock-rust"
+if ($RequireAdblock) {
+    & (Join-Path $PSScriptRoot "build-adblock.ps1") -RequireRust
+}
+else {
+    & (Join-Path $PSScriptRoot "build-adblock.ps1")
+}
+Assert-ExitCode $LASTEXITCODE "Adblock Rust build"
 
 Write-Host "[URLScra] Restore"
 dotnet restore URLScra.csproj
