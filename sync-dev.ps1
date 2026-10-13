@@ -35,6 +35,7 @@ $files = @(
     "native/urlscra-adblock/Cargo.toml",
     "native/urlscra-adblock/src/lib.rs",
     "build-adblock.ps1",
+    "setup-rust.ps1",
     "pipeline.ps1",
     "install-browser.ps1",
     "ensure-icon.ps1",
