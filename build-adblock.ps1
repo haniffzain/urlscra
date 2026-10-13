@@ -8,7 +8,7 @@ $manifest = Join-Path $root "native\urlscra-adblock\Cargo.toml"
 $outDir = Join-Path $root "native\bin"
 $outDll = Join-Path $outDir "urlscra_adblock.dll"
 
-function Fail-Or-Warn {
+function Stop-Or-Warn {
     param([string]$Message)
 
     if ($RequireRust) {
@@ -16,23 +16,29 @@ function Fail-Or-Warn {
     }
 
     Write-Warning $Message
-    exit 0
+    return $false
 }
 
 $cargo = Get-Command cargo -ErrorAction SilentlyContinue
 if (-not $cargo) {
-    Fail-Or-Warn "[URLScra] Rust cargo not found. Adblock Rust will be disabled until Rust is installed and this script is rerun."
+    if (-not (Stop-Or-Warn "[URLScra] Rust cargo not found. Adblock Rust will be disabled until Rust is installed and this script is rerun.")) {
+        return
+    }
 }
 
 Write-Host "[URLScra] Build adblock-rust native bridge"
 & cargo build --release --manifest-path $manifest
 if ($LASTEXITCODE -ne 0) {
-    Fail-Or-Warn "[URLScra] adblock-rust native build failed with exit code $LASTEXITCODE."
+    if (-not (Stop-Or-Warn "[URLScra] adblock-rust native build failed with exit code $LASTEXITCODE.")) {
+        return
+    }
 }
 
 $builtDll = Join-Path $root "native\urlscra-adblock\target\release\urlscra_adblock.dll"
 if (-not (Test-Path $builtDll)) {
-    Fail-Or-Warn "[URLScra] adblock-rust build completed but urlscra_adblock.dll was not found."
+    if (-not (Stop-Or-Warn "[URLScra] adblock-rust build completed but urlscra_adblock.dll was not found.")) {
+        return
+    }
 }
 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
