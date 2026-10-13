@@ -1,0 +1,12 @@
+[package]
+name = "urlscra-adblock"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "urlscra_adblock"
+crate-type = ["cdylib"]
+
+[dependencies]
+adblock = "=0.13.3"
